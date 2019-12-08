@@ -16,7 +16,17 @@ struct BlockID
 
 	bool operator<(const BlockID& other) const
 	{
-		return x < other.x ? true : (y == other.y ? z < other.z : y < other.y);
+		if (x < other.x) return true;
+		else if(x == other.x)
+		{
+			if (y == other.y) return z < other.z;
+			else return y < other.y;
+		}
+		else
+		{
+			return false;
+		}
+		//return x < other.x ? true : (y == other.y ? (z == other.z ? false: true) : y < other.y);
 	}
 	std::vector<int> toArray() const
 	{
@@ -70,14 +80,14 @@ inline void BlockAddressing::calcBlockArray(const std::string& file_name, const 
 	{
 		// address translation
 		//const auto x = point.x * volumeDataSizeNoRepeat.x / (blockDataSizeNoRepeat.x * pageTableSize.x)
-		const auto x = (point.x / volume_size.x * volumeDataSizeNoRepeat.x / (blockDataSizeNoRepeat.x * pageTableSize.x) * pageTableSize.x);
-		const auto y = (point.y / volume_size.y * volumeDataSizeNoRepeat.y / (blockDataSizeNoRepeat.y * pageTableSize.y) * pageTableSize.y);
-		const auto z = (point.z / volume_size.z * volumeDataSizeNoRepeat.z / (blockDataSizeNoRepeat.z * pageTableSize.z) * pageTableSize.z);
+		const int x = (point.x / volume_size.x * volumeDataSizeNoRepeat.x / (blockDataSizeNoRepeat.x * pageTableSize.x) * pageTableSize.x);
+		const int y = (point.y / volume_size.y * volumeDataSizeNoRepeat.y / (blockDataSizeNoRepeat.y * pageTableSize.y) * pageTableSize.y);
+		const int z = (point.z / volume_size.z * volumeDataSizeNoRepeat.z / (blockDataSizeNoRepeat.z * pageTableSize.z) * pageTableSize.z);
 		//ivec3 entry3DIndex = ivec3(samplePos*pageTableSize);
 		//unsigned int entryFlatIndex = entry3DIndex.z * pageTableSize.x*pageTableSize.y + entry3DIndex.y * pageTableSize.x + entry3DIndex.x;
 		//auto blockIndex = ysl::Linear({ x,y,z }, {pageTableSize.x,pageTableSize.y});
 
-		block_set.insert({ (int)x,(int)y,(int)z });
+		block_set.insert({ x, y, z });
 	}
 	std::cout << "Block number for obj file : " << file_name << " has been calculated" << std::endl;
 

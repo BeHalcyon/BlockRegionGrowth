@@ -105,7 +105,7 @@ inline const void* BlockDataReader::getBlock(int block_id)
 
 inline const void* BlockDataReader::getBlock(int x,int y,int z)
 {
-	//const auto pageCount = reader->Get3DPageCount();
+	const auto pageCount = reader->Get3DPageCount();
 	const auto pageSize = reader->Get3DPageSize();
 	//const auto sizeInLog = reader->Get3DPageSizeInLog();
 	//const auto dataSize = reader->GetDataSizeWithoutPadding();
@@ -115,7 +115,8 @@ inline const void* BlockDataReader::getBlock(int x,int y,int z)
 	//const auto pPageCount = reader->GetPhysicalPageCount();
 	//const auto vPageCount = reader->GetVirtualPageCount();
 	
-	auto id = ysl::Linear({x,y,z}, { pageSize.x, pageSize.y });
+	//auto id = ysl::Linear({ x,y,z }, { pageSize.x, pageSize.y });
+	auto id = ysl::Linear({x,y,z}, { pageCount.x, pageCount.y});
 	return reader->GetPage(id);
 }
 

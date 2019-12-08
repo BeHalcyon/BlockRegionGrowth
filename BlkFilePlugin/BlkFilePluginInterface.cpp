@@ -9,7 +9,7 @@
 void BlkBlockFilePlugin::Open(const std::string& fileName)
 {
 
-	inFile.open(fileName);
+	inFile.open(fileName, std::ios::binary);
 	if (inFile.is_open() == false)
 	{
 		throw std::runtime_error("can not file file");
@@ -71,12 +71,13 @@ ysl::Size3 BlkBlockFilePlugin::Get3DPageCount() const
 
 const void* BlkBlockFilePlugin::GetPage(size_t pageID)
 {
-	if(pageID>block_number.Prod())
-	{
-		vm::println("Page ID error.");
-		return nullptr;
-	}
-	inFile.seekg(head_size+pageID*blockSize.Prod());
+	//if(pageID>block_number.Prod())
+	//{
+	//	vm::println("Page ID error.");
+	//	return nullptr;
+	//}
+	//
+	inFile.seekg(head_size+pageID*blockSize.Prod(),std::ios::beg);
 
 	//delete[] dataPtr;
 	//
