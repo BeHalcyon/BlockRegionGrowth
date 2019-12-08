@@ -41,7 +41,20 @@ void BlkBlockFilePlugin::Open(const std::string& fileName)
 	inFile.read((char*)&padding, sizeof(size_t));
 
 
+	inFile.read((char*)&non_empty_block_number, sizeof(size_t));
+	non_empty_block_id_array.resize(non_empty_block_number, -1);
+	for(auto i=0;i<non_empty_block_number;i++)
+	{
+		inFile.read((char*)&non_empty_block_id_array[i], sizeof(size_t));
+		//vm::println("non_empty_block_id_array[{}]:{}", i, non_empty_block_id_array[i]);
+	}
+
+	head_size = 112 + (1 + non_empty_block_number) * 8;
+	
 	dataPtr = new char[blockSize.Prod()];
+	
+	empty_data_ptr = new unsigned char[blockSize.Prod()];
+	for (auto i = 0; i < blockSize.Prod(); i++) empty_data_ptr[i] = 0;
 }
 
 int BlkBlockFilePlugin::GetPadding() const
@@ -71,19 +84,29 @@ ysl::Size3 BlkBlockFilePlugin::Get3DPageCount() const
 
 const void* BlkBlockFilePlugin::GetPage(size_t pageID)
 {
-	//if(pageID>block_number.Prod())
-	//{
-	//	vm::println("Page ID error.");
-	//	return nullptr;
-	//}
-	//
-	inFile.seekg(head_size+pageID*blockSize.Prod(),std::ios::beg);
-
-	//delete[] dataPtr;
-	//
-	//dataPtr = new char[blockSize.Prod()];
-	inFile.read(dataPtr, blockSize.Prod());
-	return dataPtr;
+	
+	auto index = -1;
+	for(auto i=0;i<non_empty_block_number;i++)
+	{
+		if(non_empty_block_id_array[i]==pageID)
+		{
+			index = i;
+			break;
+		}
+	}
+	//empty block
+	if(index == -1)
+	{
+		return empty_data_ptr;
+	}
+	//non-empty block
+	else
+	{
+		inFile.seekg(head_size + index * blockSize.Prod(), std::ios::beg);
+		inFile.read(dataPtr, blockSize.Prod());
+		return dataPtr;
+	}
+	
 }
 
 size_t BlkBlockFilePlugin::GetPageSize() const

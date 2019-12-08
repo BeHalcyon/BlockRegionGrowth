@@ -39,6 +39,10 @@ private:
 	size_t page_size, physical_page_count, virtual_page_count, block_based, padding;
 	ysl::Size3 block_number;
 	size_t head_size = 112;
+
+	size_t non_empty_block_number = 0;
+	std::vector<size_t> non_empty_block_id_array;
+	unsigned char* empty_data_ptr = nullptr;
 };
 
 class BlkBlockFileReaderFactory :public ysl::IPluginFactory
