@@ -34,7 +34,7 @@ bool isInBlock(const ysl::Size3& volume_size, int block_based, int padding, cons
 	const int y = (point.y / volume_size.y * volumeDataSizeNoRepeat.y / (blockDataSizeNoRepeat.y * pageTableSize.y) * pageTableSize.y);
 	const int z = (point.z / volume_size.z * volumeDataSizeNoRepeat.z / (blockDataSizeNoRepeat.z * pageTableSize.z) * pageTableSize.z);*/
 	const int x = point.x / blockDataSizeNoRepeat.x;
-	const int y = point.y /blockDataSizeNoRepeat.y;
+	const int y = point.y / blockDataSizeNoRepeat.y;
 	const int z = point.z / blockDataSizeNoRepeat.z;
 
 	//if(block_id.x == (int)x && block_id.y == (int)y && block_id.z == (int)z)
@@ -42,6 +42,11 @@ bool isInBlock(const ysl::Size3& volume_size, int block_based, int padding, cons
 	//	vm::println("{},{}", ysl::Size3(x, y, z), block_id);
 	//}
 	//
+
+	//ysl::Size3 bounding_min = {block_id.x*b-padding,block_id.x * b - padding, block_id.x * b - padding}
+
+
+	
 	return block_id.x == x && block_id.y == y && block_id.z== z;
 }
 
@@ -146,9 +151,12 @@ void calcBlkNeures(BlockDataReader& reader, const std::string& obj_file)
 		const int offset[6] = { 1,-1, block_size.x , -block_size.x, block_size.x * block_size.y, -block_size.x * block_size.y };
 
 		int cnt = 0;
-
+		int non_empty_count = 0;
 		//ysl::RawReaderIO raw_reader(R"(M:\original\mouse28452x21866x4834_lod0.raw)", { 28452,21866,4834 }, 1);
 
+		std::vector<std::vector<unsigned char>> non_empty_block_array;
+		std::vector<ysl::Vec3i> non_empty_block_id;
+		
 		for (auto k = 0; k < block_mask_array.size(); k++)
 		{
 			for (auto j = 0; j < block_mask_array[k].size(); j++)
@@ -165,7 +173,7 @@ void calcBlkNeures(BlockDataReader& reader, const std::string& obj_file)
 					//非空块
 					else
 					{
-
+						non_empty_block_id.push_back({ i,j,k });
 						//Global block id
 						const ysl::Vec3i block_id = { i + block_min_bounding[0], j + block_min_bounding[1], k + block_min_bounding[2] };
 
@@ -292,8 +300,223 @@ void calcBlkNeures(BlockDataReader& reader, const std::string& obj_file)
 						int num = 0;
 						for (auto buf : block_vector) if (buf) num++;
 
+						if(num>20000)
+						{
+							vm::println("Block {} has {} non-empty voxels.", block_id, num);
 
-						block_writer.writeBody(block_vector.data(), sizeof(unsigned char) * block_size.Prod());
+							block_vector.clear();
+							block_mask_vector.clear();
+							
+							block_vector.resize(block_size.Prod(), 0);
+							block_mask_vector.resize(block_size.Prod(), 0);
+
+							
+							for (const auto& point : block_addressing.getPointSet())
+							{
+								//针对在块内的点，作为种子点，进行区域增长。
+								//TODO point 与块不对应
+								if (isInBlock(volume_size, block_based, padding, point, block_id))
+								{
+
+									ysl::Point3i local_point = { (int)((int)(point.x + 0.5) - block_id.x * (block_size.x - 2 * padding)),
+										(int)((int)(point.y + 0.5) - block_id.y * (block_size.y - 2 * padding)),
+										(int)((int)(point.z + 0.5) - block_id.z * (block_size.z - 2 * padding)) };
+
+									//int index = ysl::Linear(local_point,ysl::Size2( block_size.x - 2 * padding, block_size.y - 2 * padding ));
+
+									auto global_point = transGlobalPoint(local_point, block_size, padding);
+
+									int global_index = ysl::Linear({ global_point.x,global_point.y,global_point.z }, { block_size.x, block_size.y });
+
+									int index = global_index;
+
+									//vm::println("Point {} is in block {}, local point : {}, global point : {}", point, block_id, local_point, global_point);
+
+									if (global_point.x < padding || global_point.x >= block_size.x - padding ||
+										global_point.y < padding || global_point.y >= block_size.y - padding ||
+										global_point.z < padding || global_point.z >= block_size.z - padding)
+									{
+										//vm::println("Index out of range.");
+										continue;
+									}
+
+
+									auto seed_value = block_data[index];
+
+									//vm::println("Seed value : {}", (int)seed_value);
+
+									if (seed_value < threshold )
+									{
+										//vm::println("Value is not avaliable.");
+										continue;
+									}
+									std::stack<int> index_stack;
+
+									index_stack.push(index);
+									while (!index_stack.empty())
+									{
+										index = index_stack.top();
+										index_stack.pop();
+										block_vector[index] = block_data[index];
+										block_mask_vector[index] = 1;
+										//vm::println("test3");
+
+										for (auto idx = 0; idx < 6; idx++)
+										{
+											auto buf_index = index + offset[idx];
+
+											int buf_x = buf_index % block_size.x;
+											int buf_z = buf_index / (block_size.x * block_size.y);
+											int buf_y = (buf_index % (block_size.x * block_size.y)) / block_size.x;
+
+											ysl::Point3i buf_point = { buf_x,buf_y, buf_z };
+
+											//边界数据全部加上
+											auto distance = buf_point - global_point;
+
+											if (distance.Length() > max_distance) continue;
+
+											if (buf_index < 0 || buf_index >= block_size.Prod() || block_mask_vector[buf_index]) continue;
+
+											if (block_mask_vector[buf_index] == 0)
+											{
+												if (buf_point.x < padding || buf_point.x >= block_size.x - padding ||
+													buf_point.y < padding || buf_point.y >= block_size.y - padding ||
+													buf_point.z < padding || buf_point.z >= block_size.z - padding)
+												{
+													//设定padding部分数据为原始数据
+													//index_stack.push(buf_index);
+													//block_mask_vector[buf_index] = 1;
+												}
+												else if (block_data[buf_index] >= threshold+10)
+												{
+													index_stack.push(buf_index);
+													block_mask_vector[buf_index] = 1;
+												}
+											}
+										}
+
+										//vm::println("test0");
+									}
+								}
+							}
+							
+							num = 0;
+							for (auto buf : block_vector) if (buf) num++;
+							vm::println("Block {} has been written. It has {} non-empty voxels.", block_id, num);
+							
+						}
+						else if(num < 500)
+						{
+							vm::println("Block {} has {} non-empty voxels.", block_id, num);
+
+							block_vector.clear();
+							block_mask_vector.clear();
+
+							block_vector.resize(block_size.Prod(), 0);
+							block_mask_vector.resize(block_size.Prod(), 0);
+
+
+							for (const auto& point : block_addressing.getPointSet())
+							{
+								//针对在块内的点，作为种子点，进行区域增长。
+								//TODO point 与块不对应
+								if (isInBlock(volume_size, block_based, padding, point, block_id))
+								{
+
+									ysl::Point3i local_point = { (int)((int)(point.x + 0.5) - block_id.x * (block_size.x - 2 * padding)),
+										(int)((int)(point.y + 0.5) - block_id.y * (block_size.y - 2 * padding)),
+										(int)((int)(point.z + 0.5) - block_id.z * (block_size.z - 2 * padding)) };
+
+									//int index = ysl::Linear(local_point,ysl::Size2( block_size.x - 2 * padding, block_size.y - 2 * padding ));
+
+									auto global_point = transGlobalPoint(local_point, block_size, padding);
+
+									int global_index = ysl::Linear({ global_point.x,global_point.y,global_point.z }, { block_size.x, block_size.y });
+
+									int index = global_index;
+
+									//vm::println("Point {} is in block {}, local point : {}, global point : {}", point, block_id, local_point, global_point);
+
+									if (global_point.x < padding || global_point.x >= block_size.x - padding ||
+										global_point.y < padding || global_point.y >= block_size.y - padding ||
+										global_point.z < padding || global_point.z >= block_size.z - padding)
+									{
+										//vm::println("Index out of range.");
+										continue;
+									}
+
+
+									auto seed_value = block_data[index];
+
+									//vm::println("Seed value : {}", (int)seed_value);
+
+									if (seed_value < threshold -5)
+									{
+										//vm::println("Value is not avaliable.");
+										continue;
+									}
+									std::stack<int> index_stack;
+
+									index_stack.push(index);
+									while (!index_stack.empty())
+									{
+										index = index_stack.top();
+										index_stack.pop();
+										block_vector[index] = block_data[index];
+										block_mask_vector[index] = 1;
+										//vm::println("test3");
+
+										for (auto idx = 0; idx < 6; idx++)
+										{
+											auto buf_index = index + offset[idx];
+
+											int buf_x = buf_index % block_size.x;
+											int buf_z = buf_index / (block_size.x * block_size.y);
+											int buf_y = (buf_index % (block_size.x * block_size.y)) / block_size.x;
+
+											ysl::Point3i buf_point = { buf_x,buf_y, buf_z };
+
+											//边界数据全部加上
+											auto distance = buf_point - global_point;
+
+											//if (distance.Length() > max_distance) continue;
+
+											if (buf_index < 0 || buf_index >= block_size.Prod() || block_mask_vector[buf_index]) continue;
+
+											if (block_mask_vector[buf_index] == 0)
+											{
+												if (buf_point.x < padding || buf_point.x >= block_size.x - padding ||
+													buf_point.y < padding || buf_point.y >= block_size.y - padding ||
+													buf_point.z < padding || buf_point.z >= block_size.z - padding)
+												{
+													//设定padding部分数据为原始数据
+													//index_stack.push(buf_index);
+													//block_mask_vector[buf_index] = 1;
+												}
+												else if (block_data[buf_index] >= threshold -5)
+												{
+													index_stack.push(buf_index);
+													block_mask_vector[buf_index] = 1;
+												}
+											}
+										}
+
+										//vm::println("test0");
+									}
+								}
+							}
+
+							num = 0;
+							for (auto buf : block_vector) if (buf) num++;
+							vm::println("Block {} has been written. It has {} non-empty voxels.", block_id, num);
+
+						}
+
+						non_empty_block_array.push_back(block_vector);
+						
+						//block_writer.writeBody(block_vector.data(), sizeof(unsigned char) * block_size.Prod());
+						
 						//6322, 8306, 2602
 						//if (start_point.x == 6322 && start_point.y == 8306 && start_point.z == 2602)
 						{
@@ -303,15 +526,226 @@ void calcBlkNeures(BlockDataReader& reader, const std::string& obj_file)
 							//return 0;
 						}
 
-						//vm::println("Block {} has been written. It has {} non-empty voxels.", block_id, num);
+						
+						vm::println("Block {} : {} has been written. It has {} non-empty voxels.", block_id, non_empty_count, num);
 						//num++;
-
+						non_empty_count++;
 						if (num) cnt++;
 					}
 
 				}
 			}
 		}
+		// 判断非空块的位置，前后左右上下是否有空块。
+		const int dx[6] = { -1,  0,	 0, 1, 0, 0 };	//0  1  2  3  4  5
+		const int dy[6] = {  0, -1,  0, 0, 1, 0 };	//左 后 下 右 前 上
+		const int dz[6] = {  0,  0, -1, 0, 0, 1 };
+		unsigned char broken_threshold = 60;
+		unsigned char seed_threshold = 220;
+		auto count = 0;
+		
+		for(auto center_block_id: non_empty_block_id)
+		{
+			auto& center_block_vector = non_empty_block_array[count];
+
+			bool is_modified = false;
+
+			std::vector<int> filter_mask(block_size.Prod(), 0);
+			std::stack<int> boundary_seed_stack;
+			for(auto i=0;i<6;i++)
+			{
+				auto cur_block_id = center_block_id + ysl::Vec3i(dx[i], dy[i], dz[i]);
+				if(cur_block_id.x<0 || cur_block_id.x>= block_number.x ||
+					cur_block_id.y < 0 || cur_block_id.y >= block_number.y ||
+					cur_block_id.z < 0 || cur_block_id.z >= block_number.z)
+				{
+					continue;
+				}
+				//上下文块为空块时判断筛选
+				
+				if(block_mask_array[cur_block_id.z][cur_block_id.y][cur_block_id.x]==0)
+				{
+					//std::stack<int> boundary_seed_stack;
+					switch (i)
+					{
+					case 0:
+						for(auto z=padding;z<block_size.z-padding;z++)
+						{
+							for(auto y=padding;y<block_size.y-padding;y++)
+							{
+								auto linear_id = ysl::Linear({ padding, y, z }, { block_size.x,block_size.y });
+								if(center_block_vector[linear_id]>=seed_threshold)
+								{
+									boundary_seed_stack.push(linear_id);
+								}
+							}
+						}
+						break;
+					case 3:
+						for (auto z = padding; z < block_size.z - padding; z++)
+						{
+							for (auto y = padding; y < block_size.y - padding; y++)
+							{
+								auto linear_id = ysl::Linear({ (int)block_size.x- padding -1, y, z }, { block_size.x,block_size.y });
+								if (center_block_vector[linear_id] >= seed_threshold)
+								{
+									boundary_seed_stack.push(linear_id);
+								}
+							}
+						}
+						break;
+					case 1:
+						for (auto z = padding; z < block_size.z - padding; z++)
+						{
+							for (auto x = padding; x < block_size.x - padding; x++)
+							{
+								auto linear_id = ysl::Linear({ x, padding, z }, { block_size.x,block_size.y });
+								if (center_block_vector[linear_id] >= seed_threshold)
+								{
+									boundary_seed_stack.push(linear_id);
+								}
+							}
+						}
+						break;
+					case 4:
+						for (auto z = padding; z < block_size.z - padding; z++)
+						{
+							for (auto x = padding; x < block_size.x - padding; x++)
+							{
+								auto linear_id = ysl::Linear({ x, (int)block_size.y-padding-1, z }, { block_size.x,block_size.y });
+								if (center_block_vector[linear_id] >= seed_threshold)
+								{
+									boundary_seed_stack.push(linear_id);
+								}
+							}
+						}
+						break;
+					case 2:
+						for (auto y = padding; y < block_size.y - padding; y++)
+						{
+							for (auto x = padding; x < block_size.x - padding; x++)
+							{
+								auto linear_id = ysl::Linear({ x, y, padding }, { block_size.x,block_size.y });
+								if (center_block_vector[linear_id] >= seed_threshold)
+								{
+									boundary_seed_stack.push(linear_id);
+								}
+							}
+						}
+						break;
+					case 5:
+						for (auto y = padding; y < block_size.y - padding; y++)
+						{
+							for (auto x = padding; x < block_size.x - padding; x++)
+							{
+								auto linear_id = ysl::Linear({ x, y, (int)block_size.z-padding-1 }, { block_size.x,block_size.y });
+								if (center_block_vector[linear_id] >= seed_threshold)
+								{
+									boundary_seed_stack.push(linear_id);
+								}
+							}
+						}
+						break;
+					default: break;
+					}
+				}
+			}
+
+
+			
+			is_modified = !boundary_seed_stack.empty();
+			ysl::Point3i global_point;
+
+			while (!boundary_seed_stack.empty())
+			{
+				auto index = boundary_seed_stack.top();
+				boundary_seed_stack.pop();
+				
+
+				if (center_block_vector[index] >= seed_threshold)
+				{
+					int bufx = index % block_size.x;
+					int bufz = index / (block_size.x * block_size.y);
+					int bufy = (index % (block_size.x * block_size.y)) / block_size.x;
+
+					global_point = { bufx,bufy,bufz };
+				}
+
+				if (filter_mask[index] == 0)
+				{
+					//说明是种子点
+					//continue;
+					filter_mask[index] = 1;
+					center_block_vector[index] = 0;
+				}
+				//filter_mask[index] = 1;
+				else
+				{
+					center_block_vector[index] = 0;
+				}
+
+				
+				if (center_block_vector[index] > broken_threshold)
+					center_block_vector[index] = 0;
+
+				for (auto idx = 0; idx < 6; idx++)
+				{
+					auto buf_index = index + offset[idx];
+
+					int buf_x = buf_index % block_size.x;
+					int buf_z = buf_index / (block_size.x * block_size.y);
+					int buf_y = (buf_index % (block_size.x * block_size.y)) / block_size.x;
+
+					ysl::Point3i buf_point = { buf_x,buf_y, buf_z };
+
+					//边界数据全部加上
+					auto distance = buf_point - global_point;
+
+					if (distance.Length() > max_distance) continue;
+
+					if (buf_index < 0 || buf_index >= block_size.Prod() || filter_mask[buf_index]) continue;
+					if (filter_mask[buf_index] == 0)
+					{
+						if (buf_point.x < padding || buf_point.x >= block_size.x - padding ||
+							buf_point.y < padding || buf_point.y >= block_size.y - padding ||
+							buf_point.z < padding || buf_point.z >= block_size.z - padding)
+						{
+							//设定padding部分数据为原始数据
+							//index_stack.push(buf_index);
+							//block_mask_vector[buf_index] = 1;
+						}
+						else if (center_block_vector[buf_index] >= broken_threshold)
+						{
+							boundary_seed_stack.push(buf_index);
+							filter_mask[buf_index] = 1;
+						}
+
+					}
+				}
+			}
+
+
+			
+			int non_empty_voxel = 0;
+			for(auto i=0;i<center_block_vector.size();i++)
+			{
+				if (center_block_vector[i]) non_empty_voxel++;
+			}
+			//vm::println("Non-empty block {} has {} non-empty voxels.", count, non_empty_voxel);
+
+			//if(is_modified)
+				vm::println("Non-empty {} has been modified to {} non-empty voxles.",  count, non_empty_voxel);
+			
+			count++;
+		}
+
+
+		// Write data.
+		for(auto & block:non_empty_block_array)
+		{
+			block_writer.writeBody(block.data(), block.size() * sizeof(unsigned char));
+		}
+		
 
 		//vm::println("Number of non-empty blocks : \t{}", cnt);
 
@@ -362,11 +796,14 @@ int main(int argc, char * argv[])
 		vm::println("{}", e.what());
 	}
 	
-	for (auto i = 0; i < ObjJson.obj_files.size();i++)
-	{
-		std::string obj_file = ObjJson.file_prefix + ObjJson.obj_files[i];
-		calcBlkNeures(reader, obj_file);
-	}
+	//for (auto i = 0; i < ObjJson.obj_files.size();i++)
+	//{
+	//	std::string obj_file = ObjJson.file_prefix + ObjJson.obj_files[i];
+	//	calcBlkNeures(reader, obj_file);
+	//}
+
+	std::string obj_file = R"(E:\14193_30neurons\N005.obj)";
+	calcBlkNeures(reader, obj_file);
 	
 
 	return 0;
