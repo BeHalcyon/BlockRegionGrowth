@@ -43,9 +43,12 @@ bool isInBlock(const ysl::Size3& volume_size, int block_based, int padding, cons
 	//}
 	//
 
-	//ysl::Size3 bounding_min = {block_id.x*b-padding,block_id.x * b - padding, block_id.x * b - padding}
+	ysl::Vec3i bounding_min = { (int)(block_id.x * b - padding),(int)(block_id.y * b - padding), (int)(block_id.z * b - padding) };
+	ysl::Vec3i bounding_max = { (int)(block_id.x * (b) + b + padding),(int)(block_id.y * (b )+b + padding),
+		(int)(block_id.z * (b)+b + padding ) };
 
-
+	return bounding_min.x <= point.x && bounding_min.y <= point.y && bounding_min.z <= point.z &&
+		bounding_max.x > point.x && bounding_max.y > point.y && bounding_max.z > point.z;
 	
 	return block_id.x == x && block_id.y == y && block_id.z== z;
 }
@@ -227,14 +230,22 @@ void calcBlkNeures(BlockDataReader& reader, const std::string& obj_file)
 
 								//vm::println("Point {} is in block {}, local point : {}, global point : {}", point, block_id, local_point, global_point);
 
-								if (global_point.x < padding || global_point.x >= block_size.x - padding ||
-									global_point.y < padding || global_point.y >= block_size.y - padding ||
-									global_point.z < padding || global_point.z >= block_size.z - padding)
+								//if (global_point.x < padding || global_point.x >= block_size.x - padding ||
+								//	global_point.y < padding || global_point.y >= block_size.y - padding ||
+								//	global_point.z < padding || global_point.z >= block_size.z - padding)
+								//{
+								//	//vm::println("Index out of range.");
+								//	continue;
+								//}
+
+								if (global_point.x < 0 || global_point.x >= block_size.x ||
+									global_point.y < 0 || global_point.y >= block_size.y ||
+									global_point.z < 0 || global_point.z >= block_size.z )
 								{
 									//vm::println("Index out of range.");
 									continue;
 								}
-
+								
 
 								auto seed_value = block_data[index];
 
@@ -275,9 +286,13 @@ void calcBlkNeures(BlockDataReader& reader, const std::string& obj_file)
 
 										if (block_mask_vector[buf_index] == 0)
 										{
-											if (buf_point.x < padding || buf_point.x >= block_size.x - padding ||
+											/*if (buf_point.x < padding || buf_point.x >= block_size.x - padding ||
 												buf_point.y < padding || buf_point.y >= block_size.y - padding ||
 												buf_point.z < padding || buf_point.z >= block_size.z - padding)
+											{*/
+											if (buf_point.x < 0 || buf_point.x >= block_size.x  ||
+												buf_point.y < 0 || buf_point.y >= block_size.y  ||
+												buf_point.z < 0 || buf_point.z >= block_size.z )
 											{
 												//设定padding部分数据为原始数据
 												//index_stack.push(buf_index);
@@ -332,14 +347,21 @@ void calcBlkNeures(BlockDataReader& reader, const std::string& obj_file)
 
 									//vm::println("Point {} is in block {}, local point : {}, global point : {}", point, block_id, local_point, global_point);
 
-									if (global_point.x < padding || global_point.x >= block_size.x - padding ||
-										global_point.y < padding || global_point.y >= block_size.y - padding ||
-										global_point.z < padding || global_point.z >= block_size.z - padding)
+									//if (global_point.x < padding || global_point.x >= block_size.x - padding ||
+									//	global_point.y < padding || global_point.y >= block_size.y - padding ||
+									//	global_point.z < padding || global_point.z >= block_size.z - padding)
+									//{
+									//	//vm::println("Index out of range.");
+									//	continue;
+									//}
+
+									if (global_point.x < 0 || global_point.x >= block_size.x  ||
+										global_point.y < 0 || global_point.y >= block_size.y  ||
+										global_point.z < 0 || global_point.z >= block_size.z )
 									{
 										//vm::println("Index out of range.");
 										continue;
 									}
-
 
 									auto seed_value = block_data[index];
 
@@ -380,9 +402,13 @@ void calcBlkNeures(BlockDataReader& reader, const std::string& obj_file)
 
 											if (block_mask_vector[buf_index] == 0)
 											{
-												if (buf_point.x < padding || buf_point.x >= block_size.x - padding ||
+												/*if (buf_point.x < padding || buf_point.x >= block_size.x - padding ||
 													buf_point.y < padding || buf_point.y >= block_size.y - padding ||
 													buf_point.z < padding || buf_point.z >= block_size.z - padding)
+												{*/
+												if (buf_point.x < 0 || buf_point.x >= block_size.x - 0 ||
+													buf_point.y < 0 || buf_point.y >= block_size.y - 0 ||
+													buf_point.z < 0 || buf_point.z >= block_size.z - 0)
 												{
 													//设定padding部分数据为原始数据
 													//index_stack.push(buf_index);
@@ -438,9 +464,13 @@ void calcBlkNeures(BlockDataReader& reader, const std::string& obj_file)
 
 									//vm::println("Point {} is in block {}, local point : {}, global point : {}", point, block_id, local_point, global_point);
 
-									if (global_point.x < padding || global_point.x >= block_size.x - padding ||
-										global_point.y < padding || global_point.y >= block_size.y - padding ||
-										global_point.z < padding || global_point.z >= block_size.z - padding)
+									//if (global_point.x < padding || global_point.x >= block_size.x - padding ||
+									//	global_point.y < padding || global_point.y >= block_size.y - padding ||
+									//	global_point.z < padding || global_point.z >= block_size.z - padding)
+									//{
+									if (global_point.x < 0 || global_point.x >= block_size.x - 0 ||
+										global_point.y < 0 || global_point.y >= block_size.y - 0 ||
+										global_point.z < 0 || global_point.z >= block_size.z - 0)
 									{
 										//vm::println("Index out of range.");
 										continue;
@@ -486,9 +516,13 @@ void calcBlkNeures(BlockDataReader& reader, const std::string& obj_file)
 
 											if (block_mask_vector[buf_index] == 0)
 											{
-												if (buf_point.x < padding || buf_point.x >= block_size.x - padding ||
+												/*if (buf_point.x < padding || buf_point.x >= block_size.x - padding ||
 													buf_point.y < padding || buf_point.y >= block_size.y - padding ||
 													buf_point.z < padding || buf_point.z >= block_size.z - padding)
+												{*/
+												if (buf_point.x < 0 || buf_point.x >= block_size.x - 0 ||
+													buf_point.y < 0 || buf_point.y >= block_size.y - 0 ||
+													buf_point.z < 0 || buf_point.z >= block_size.z - 0)
 												{
 													//设定padding部分数据为原始数据
 													//index_stack.push(buf_index);
@@ -566,6 +600,7 @@ void calcBlkNeures(BlockDataReader& reader, const std::string& obj_file)
 				if(block_mask_array[cur_block_id.z][cur_block_id.y][cur_block_id.x]==0)
 				{
 					//std::stack<int> boundary_seed_stack;
+					int padding = 0;
 					switch (i)
 					{
 					case 0:
@@ -706,9 +741,13 @@ void calcBlkNeures(BlockDataReader& reader, const std::string& obj_file)
 					if (buf_index < 0 || buf_index >= block_size.Prod() || filter_mask[buf_index]) continue;
 					if (filter_mask[buf_index] == 0)
 					{
-						if (buf_point.x < padding || buf_point.x >= block_size.x - padding ||
-							buf_point.y < padding || buf_point.y >= block_size.y - padding ||
-							buf_point.z < padding || buf_point.z >= block_size.z - padding)
+						//if (buf_point.x < padding || buf_point.x >= block_size.x - padding ||
+						//	buf_point.y < padding || buf_point.y >= block_size.y - padding ||
+						//	buf_point.z < padding || buf_point.z >= block_size.z - padding)
+						//{
+						if (buf_point.x < 0 || buf_point.x >= block_size.x - 0 ||
+							buf_point.y < 0 || buf_point.y >= block_size.y - 0 ||
+							buf_point.z < 0 || buf_point.z >= block_size.z - 0)
 						{
 							//设定padding部分数据为原始数据
 							//index_stack.push(buf_index);
